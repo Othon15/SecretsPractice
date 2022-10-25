@@ -24,7 +24,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 //console.log(process.env.API_KEY);
 
 app.use(session({                          //security level 5 apo to prwto vima pou kanoume,wste na xrisimopoihsoume to package
-  secret : "Our little secret.",
+  secret : "Our little secret.",           //einai ena js object me properties!
   resave : false,
   saveUninitialized : false
 }));
@@ -65,14 +65,51 @@ app.get("/register",function (req, res){
   res.render("register");
 });
 
+app.get("/secrets", function (req, res){
+  if (req.isAuthenticated()){
+    res.render("secrets");
+  }else {
+    res.redirect("/login");
+  }
+});
 
-app.post("/register", function (req, rest){
+app.get("/logout",function (req, res){
+  req.logout(function(err){          //// einai apo to passport read  docs
+    if(err){ return next (err); }
+  res.redirect("/");
+    });
+});
 
+app.post("/register", function (req, res){
+User.register({username:req.body.username},req.body.password ,function (err, user){   // to .register einai apo to passport-local-mongoose package kai mono e3aitias
+  if (err) {                                           // autou mporoume  na apofigoume na ftia3oume neo user kai na kanoume interact me to mongoose apeu8eias
+    console.log(err);                                  // afinontas to method na kanei ton middleman
+    res.redirect("/register");
+  } else {
+    passport.authenticate("local")(req, res, function (){
+      res.redirect("/secrets");
+    });
+  }
+});
 });
 
 
 app.post("/login", function (req, res){
 
+ const user =  new User ({
+   username: req.body.username,
+   password: req.body.password
+ });
+
+req.login(user, function(err){
+  if (err) {
+    console.log(err);
+  } else {
+    passport.authenticate("local")(req, res, function (){      //einai apo to passport read docs
+      res.redirect("/secrets");
+    });
+    }
+});
 });
 
 app.listen(3000,function(){
