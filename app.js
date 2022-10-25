@@ -11,8 +11,8 @@ const passportLocalMongoose = require("passport-local-mongoose");
 //const md5 = require ("md5"); to afairoume kai vazoume sti 8esi tou to bcrypt sto level 4 afou exei ginei to install package
 //const bcrypt = require ("bcrypt"); // aparaitito gia na enable to bcryot
 //const saltRounds = 10; // pososus gurous salt 8eloume                         //to apenergooiisahme gia na valoumee to passport
-
-
+const GoogleStrategy = require ("passport-google-oauth20").Strategy; // it uses the passport-google-oauth20 package,we use it as a passport strategy
+const findOrCreate = require ("mongoose-findorcreate");    //aparaitito gia na doulepsei to function findOrCreate,energopoiei to antistixoi npm package
 
 const app = express();
 
@@ -20,8 +20,6 @@ app.use(express.static("public"));
 app.set('view engine','ejs');
 app.use(bodyParser.urlencoded({ extended: true }));
 
-
-//console.log(process.env.API_KEY);
 
 app.use(session({                          //security level 5 apo to prwto vima pou kanoume,wste na xrisimopoihsoume to package
   secret : "Our little secret.",           //einai ena js object me properties!
@@ -39,23 +37,57 @@ mongoose.connect("mongodb://localhost:27017/userDB");
 /////////////////////////////////////////MONGOOSE SCHEMA &CONST FOR ENCRYPTUION AND MODEL//////////////////////////////////////////////
 const userSchema = new mongoose.Schema ({    //alla3ame to schema mas kai to kaname new mongoose Schema,pleon dn einai ena aplo js object,einai ena object poy
 email: String,                               // dimiourgi8ike apo to mongoose schema class
-password: String
+password: String,
+googleId: String                            // we added it here so it can match with the googleId in our passport google strategy line 63
 });
 
 userSchema.plugin(passportLocalMongoose);  //aparaitito gia to security level 5 passportLocalMongooose, xrisimopoiitai gia hash & salt twn kwdikwn kai gia
                                            // na kanoume save tous kwdikous mas sto MongoDB data base mas
 
+userSchema.plugin(findOrCreate);  //aparaito gia na doulepsei to findOrCreate package pou energopoiei to antistoixo package tou passport
+
 const User = new mongoose.model("User",userSchema);
 
 passport.use(User.createStrategy());             //responsible for autheticating requests which they accomplish by implementing an authentication mechanism (see notes!)
 
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+passport.serializeUser(function(user, done){    // me auto to code to serialization tou user 8a ginetai gia ka8e strategy authentication oxi mono gia to local mongoose
+  done(null,user.id);
+});
 
+passport.deserializeUser(function(id, done){   // me auto to code to deserialization tou user 8a ginetai gia ka8e strategy authentication oxi mono gia to local mongoose
+  User.findById(id, function(err, user){
+    done(err, user);
+  });
+});
+
+passport.use(new GoogleStrategy({                      // exei megali simasia oti mpainei edw gt alliws den 8a doulepsei!prosexe pws ta vazeis
+    clientID: process.env.CLIENT_ID,                        // baze to after all the setup and before our routes!!!!
+    clientSecret: process.env.CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/google/secrets",
+    userProfileURL:"https://www.googleapis.com/oauth2/v3/userinfo"
+  },
+  function(accessToken, refreshToken, profile, cb) {          //accessToken:allows us to get access to user's data for a longer period of time
+    console.log(profile);
+    User.findOrCreate({ googleId: profile.id }, function (err, user) {   //profile:it will contain email.google id and everything we have access to
+      return cb(err, user);                                              //we  use the data we get back to either find a user or create them if they don't exist
+    });                                                                  //findOrCreate is not a method of mongoDB or a Mongoose.
+  }                                                          //the people who documented this package came up with as pseudo codes/fake code  install findOrCreate package
+));
 
 app.get("/",function(req, res){
   res.render("home");
 });
+
+app.get("/auth/google",
+  passport.authenticate("google",{ scope: ["profile"]})  //we use passport to authenticate our user with the google strategy that we created earlier
+);
+
+app.get("/auth/google/secrets",                          //this app request is made by google when they try to redirect the user back to our website
+  passport.authenticate("google", { failureRedirect: "/login" }),  //the string has to match what we specified to google previously.
+  function(req, res) {
+      res.redirect("/secrets");                // Successful authentication, redirect to secrets.
+  });
+
 
 app.get("/login",function(req, res){
   res.render("login");
