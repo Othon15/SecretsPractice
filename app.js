@@ -38,7 +38,8 @@ mongoose.connect("mongodb://localhost:27017/userDB");
 const userSchema = new mongoose.Schema ({    //alla3ame to schema mas kai to kaname new mongoose Schema,pleon dn einai ena aplo js object,einai ena object poy
 email: String,                               // dimiourgi8ike apo to mongoose schema class
 password: String,
-googleId: String                            // we added it here so it can match with the googleId in our passport google strategy line 63
+googleId: String,                            // we added it here so it can match with the googleId in our passport google strategy line 63
+secret: String                               // we added secret gia na matcharoume ton user me to secret tou!
 });
 
 userSchema.plugin(passportLocalMongoose);  //aparaitito gia to security level 5 passportLocalMongooose, xrisimopoiitai gia hash & salt twn kwdikwn kai gia
@@ -97,12 +98,44 @@ app.get("/register",function (req, res){
   res.render("register");
 });
 
-app.get("/secrets", function (req, res){
-  if (req.isAuthenticated()){
-    res.render("secrets");
-  }else {
-    res.redirect("/login");
-  }
+app.get("/secrets", function (req, res){               //svisame to proigoume gt den 8a einai pleon privileged page,mporei na blepei ta secrets opoiosdipote!
+  User.find({"secret": {$ne: null}}, function (err, foundUsers){  // we use this model kai entopizoume opoio field me to onoma secret exei value
+    if (err){                                           // me to {$ne: null}} simenei pou den einai miden petixenoume ton stoxo mas
+      console.log();
+    } else {
+      if (foundUsers){                                   // ena vroume tous tous pigenoume sto "secrets"
+        res.render("secrets", {userWithSecrets: foundUsers}); //vazoume to variable userWithSecrets kai pername san value tous foundUsers wste na tous deixnoume
+      }                                                        // sto ejs file kai na fainontai ta secrets me tin xrisi tou forEach loop.
+    }
+  });
+});
+
+
+app.get("/submit" ,function (req, res){       //an o user einai authenticated mporei na dei to submit page,alliws tous stelnoume sto login gia na sinde8oun!
+   if (req.isAuthenticated()){
+     res.render("submit");
+   } else {
+     res.redirect("/login");
+   }
+});
+
+app.post("/submit",function (req, res){    //mporoume na kanoume submit gt exoume idi etoiamasi to submit form  me to method kai to submit button sto antistoixo ejs file.
+  const submittedSecret = req.body.secret; // xrisimopoioume to bodyParser gia na matcharoyme auta ta duo me to "secret" pou einai to name sto form tou submit.ejs
+                                           //to passport saves ta user details into the request variable it helps us a lot!
+  console.log(req.user.id);
+
+  User.findById(req.user.id, function (err, foundUser){  // edw xrisimopoioume to user model gia na briskoume osous user exoun kanei submit kapoio secret.
+    if (err) {
+      console.log (err);
+    } else {                                            // ean broume foundUser then we are going to set the foundUser.secret = submittedSecret;
+      if (foundUser) {
+        foundUser.secret = submittedSecret;            // 8a ton kanoume save me to updated secret tou
+        foundUser.save(function(){
+          res.redirect("/secrets");                   //meta 8a ton kanoume redirect gia na vlepei ta secret tou!
+        });
+      }
+    }
+  });
 });
 
 app.get("/logout",function (req, res){
